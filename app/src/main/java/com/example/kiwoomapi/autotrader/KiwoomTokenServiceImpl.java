@@ -2,17 +2,21 @@ package com.example.kiwoomapi.autotrader;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.stereotype.Service;
+
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
-import java.util.Scanner;
 import java.util.Arrays;
+import java.util.Scanner;
 
-// 접근토큰 발급
-public class KiwoomTokenManager {
-    private static String accessToken;
+@Service
+public class KiwoomTokenServiceImpl implements KiwoomTokenService {
 
-    public static String getAccessToken(String jsonData) {
+    private String accessToken;
+
+    @Override
+    public String getAccessToken(String jsonData) {
         try {
             // 1. 요청할 API URL
             // String host = "https://mockapi.kiwoom.com"; // 모의투자
@@ -62,7 +66,8 @@ public class KiwoomTokenManager {
         }
     }
 
-    public static String getStoredAccessToken() {
+    @Override
+    public String getStoredAccessToken() {
         return accessToken;
     }
 }
