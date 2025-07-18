@@ -1,18 +1,32 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import reactLogo from './assets/react.svg';
 import viteLogo from '/vite.svg';
 import './App.css';
 
 function App() {
-  const [count, setCount] = useState(0);
-  const [backendMessage, setBackendMessage] = useState('');
+  const [tokenStatus, setTokenStatus] = useState('Not fetched yet.');
 
-  useEffect(() => {
-    fetch('http://localhost:8080/api/hello')
-      .then(response => response.text())
-      .then(data => setBackendMessage(data))
-      .catch(error => console.error('Error fetching from backend:', error));
-  }, []);
+  const handleGetToken = async () => {
+    try {
+      const response = await fetch('/api/get-token');
+      const data = await response.text();
+      setTokenStatus(data);
+    } catch (error) {
+      console.error('Error getting token:', error);
+      setTokenStatus('Error getting token.');
+    }
+  };
+
+  const handleRevokeToken = async () => {
+    try {
+      const response = await fetch('/api/revoke-token');
+      const data = await response.text();
+      setTokenStatus(data);
+    } catch (error) {
+      console.error('Error revoking token:', error);
+      setTokenStatus('Error revoking token.');
+    }
+  };
 
   return (
     <>
@@ -24,16 +38,16 @@ function App() {
           <img src={reactLogo} className="logo react" alt="React logo" />
         </a>
       </div>
-      <h1>Vite + React</h1>
+      <h1>Kiwoom API Token Management</h1>
       <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
+        <button onClick={handleGetToken}>
+          Get/Refresh Token
         </button>
-        <p>
-          Edit <code>src/App.tsx</code> and save to test HMR
-        </p>
+        <button onClick={handleRevokeToken}>
+          Revoke Token
+        </button>
+        <p>Token Status: {tokenStatus}</p>
       </div>
-      <p>Message from Backend: {backendMessage}</p>
       <p className="read-the-docs">
         Click on the Vite and React logos to learn more
       </p>

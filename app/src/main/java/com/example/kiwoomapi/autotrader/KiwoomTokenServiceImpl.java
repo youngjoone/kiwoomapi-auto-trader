@@ -56,7 +56,8 @@ public class KiwoomTokenServiceImpl implements KiwoomTokenService {
 
                 ObjectMapper objectMapper = new ObjectMapper();
                 JsonNode rootNode = objectMapper.readTree(responseBody);
-                accessToken = rootNode.path("access_token").asText();
+                accessToken = rootNode.path("token").asText();
+                System.out.println("DEBUG: Access token set in service (full): [" + accessToken + "]");
                 return accessToken;
             }
 
@@ -68,6 +69,54 @@ public class KiwoomTokenServiceImpl implements KiwoomTokenService {
 
     @Override
     public String getStoredAccessToken() {
+        System.out.println("DEBUG: getStoredAccessToken called. Current token (full): [" + accessToken + "]");
         return accessToken;
+    }
+
+    @Override
+    public boolean revokeAccessToken() {
+        System.out.println("DEBUG: revokeAccessToken called. Token before check (full): [" + accessToken + "]");
+        if (accessToken == null || accessToken.isEmpty()) {
+            System.out.println("No access token to revoke.");
+            return false;
+        }
+
+        try {
+            String host = "https://api.kiwoom.com"; // 실전투자
+            String endpoint = "/oauth2/revoke"; // 키움 API 토큰 폐기 엔드포인트 (가정)
+            String urlString = host + endpoint;
+
+            URL url = new URL(urlString);
+            HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+
+            connection.setRequestMethod("POST");
+            connection.setRequestProperty("Content-Type", "application/json;charset=UTF-8"); // 컨텐츠타입
+            connection.setDoOutput(true);
+
+            String requestBody = "{\"token\":\"" + accessToken + "\"}";
+            try (OutputStream os = connection.getOutputStream()) {
+                byte[] input = requestBody.getBytes("utf-8");
+                os.write(input, 0, input.length);
+            }
+
+            int responseCode = connection.getResponseCode();
+            System.out.println("Revoke Token Response Code: " + responseCode);
+
+            if (responseCode == HttpURLConnection.HTTP_OK) {
+                System.out.println("Access token successfully revoked from Kiwoom API.");
+                this.accessToken = null; // 로컬 토큰 무효화
+                return true;
+            } else {
+                try (Scanner scanner = new Scanner(connection.getErrorStream(), "utf-8")) {
+                    String errorResponse = scanner.useDelimiter("\\A").next();
+                    System.err.println("Failed to revoke token. Error: " + errorResponse);
+                }
+                return false;
+            }
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            return false;
+        }
     }
 }

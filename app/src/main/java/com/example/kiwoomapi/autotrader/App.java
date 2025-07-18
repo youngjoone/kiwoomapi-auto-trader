@@ -33,6 +33,36 @@ public class App {
         return "Hello from Backend!";
     }
 
+    @GetMapping("/api/revoke-token")
+    public String revokeToken() {
+        boolean revoked = kiwoomTokenService.revokeAccessToken();
+        if (revoked) {
+            return "Token revoked successfully.";
+        } else {
+            return "Failed to revoke token or no token to revoke.";
+        }
+    }
+
+    @GetMapping("/api/get-token")
+    public String getToken() {
+        String storedToken = kiwoomTokenService.getStoredAccessToken();
+        if (storedToken != null && !storedToken.isEmpty()) {
+            return "Current Token: " + storedToken;
+        } else {
+            // If no token is stored, try to get a new one
+            String jsonData = String.format(
+                "{\"grant_type\" : \"client_credentials\",\"appkey\" : \"%s\",\"secretkey\" : \"%s\"}",
+                kiwoomAppkey, kiwoomSecretkey
+            );
+            String newToken = kiwoomTokenService.getAccessToken(jsonData);
+            if (newToken != null) {
+                return "New Token obtained: " + newToken;
+            } else {
+                return "Failed to obtain token.";
+            }
+        }
+    }
+
     @Bean
     public CommandLineRunner commandLineRunner() {
         return args -> {
