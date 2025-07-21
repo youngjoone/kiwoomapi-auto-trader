@@ -3,15 +3,20 @@ package com.example.kiwoomapi.autotrader.service;
 import com.example.kiwoomapi.autotrader.service.KiwoomTokenService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.retry.annotation.Backoff;
+import org.springframework.retry.annotation.Retryable;
 import org.springframework.stereotype.Service;
 
+import java.io.IOException;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.Arrays;
 import java.util.Scanner;
 
+@Slf4j
 @Service
 public class KiwoomTokenServiceImpl implements KiwoomTokenService {
 
@@ -43,7 +48,9 @@ public class KiwoomTokenServiceImpl implements KiwoomTokenService {
     }
 
     @Override
-    public String getAccessToken(String jsonData) {
+    @Retryable(value = {IOException.class}, maxAttempts = 3, backoff = @Backoff(delay = 1000))
+    public String getAccessToken(String jsonData) throws IOException {
+        log.info("Attempting to get access token...");
         try {
             // 1. 요청할 API URL
             // String host = "https://mockapi.kiwoom.com"; // 모의투자
@@ -66,32 +73,35 @@ public class KiwoomTokenServiceImpl implements KiwoomTokenService {
             }
 
             // 4. 응답 헤더 출력
-            System.out.println("Code: "+ connection.getResponseCode());
-            System.out.println("Header:");
-            String[] headerKeys = {"cont-yn","next-key","api-id"};
-            connection.getHeaderFields().forEach((key, value) -> {
-                if(Arrays.asList(headerKeys).contains(key)){
-                    System.out.println("    " + key + ": " + value.get(0));
-                }
-            });
+            log.info("Response Code: {}", connection.getResponseCode());
+            // System.out.println("Header:"); // Remove System.out.println
+            // String[] headerKeys = {"cont-yn","next-key","api-id"};
+            // connection.getHeaderFields().forEach((key, value) -> {
+            //     if(Arrays.asList(headerKeys).contains(key)){
+            //         System.out.println("    " + key + ": " + value.get(0));
+            //     }
+            // });
 
             // 5. 응답 본문 출력 및 토큰 파싱
-            System.out.println("Body:");
+            // System.out.println("Body:"); // Remove System.out.println
             try (Scanner scanner = new Scanner(connection.getInputStream(), "utf-8")) {
                 String responseBody = scanner.useDelimiter("\\A").next();
-                System.out.println("    " + responseBody);
+                log.info("Response Body: {}", responseBody);
 
                 ObjectMapper objectMapper = new ObjectMapper();
                 JsonNode rootNode = objectMapper.readTree(responseBody);
                 accessToken = rootNode.path("token").asText();
                 long expiresInSeconds = rootNode.path("expires_in").asLong(); // Assuming 'expires_in' is in seconds
                 expiresIn = System.currentTimeMillis() + (expiresInSeconds * 1000); // Convert to milliseconds
-                System.out.println("DEBUG: Access token set in service (full): [" + accessToken + "]");
+                log.info("Access token obtained successfully.");
                 return accessToken;
             }
 
+        } catch (IOException e) {
+            log.error("IOException during get access token: {}", e.getMessage());
+            throw e; // Re-throw to trigger retry
         } catch (Exception e) {
-            e.printStackTrace();
+            log.error("Error during get access token: {}", e.getMessage());
             return null;
         }
     }

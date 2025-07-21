@@ -7,6 +7,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.retry.annotation.Backoff;
+import org.springframework.retry.annotation.Retryable;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
@@ -46,18 +48,19 @@ public class OrderServiceImpl implements OrderService {
     }
 
     @Override
+    @Retryable(value = {IOException.class}, maxAttempts = 3, backoff = @Backoff(delay = 1000))
     public void placeBuyOrder(String stockCode, long quantity) throws IOException {
         String accessToken = kiwoomTokenService.getStoredAccessToken();
         if (accessToken == null || accessToken.isEmpty()) {
-            log.error("Access token is not available. Cannot place buy order.");
-            return;
+            log.error("Access token is not available. Cannot place buy order for stock: {}.", stockCode);
+            throw new IOException("Access token not available for buy order.");
         }
 
         // Assume actual buy price is current market price for simplicity in this example
         long buyPrice = getCurrentPrice(stockCode);
         if (buyPrice <= 0) {
             log.error("Could not get current price for stock: {}. Cannot place buy order.", stockCode);
-            return;
+            throw new IOException("Could not get current price for stock: " + stockCode);
         }
 
         String orderRequestBody = String.format("{\"CANO\":\"%s\",\"ACNT_PRDT_CD\":\"01\",\"PDNO\":\"%s\",\"ORD_DVSN\":\"01\",\"ORD_QTY\":\"%d\",\"ORD_UNPR\":\"0\"}", 
@@ -80,17 +83,19 @@ public class OrderServiceImpl implements OrderService {
             addTradeInfo(new TradeInfo(stockCode, buyPrice, quantity, System.currentTimeMillis()));
             startRealtimeMonitoring(); // Start monitoring after a successful buy
         } catch (InterruptedException e) {
-            log.error("Error placing buy order for stock: {}", stockCode, e);
+            log.error("Error placing buy order for stock: {}. Interrupted.", stockCode, e);
             Thread.currentThread().interrupt();
+            throw new IOException("Interrupted during buy order for stock: " + stockCode, e);
         }
     }
 
     @Override
+    @Retryable(value = {IOException.class}, maxAttempts = 3, backoff = @Backoff(delay = 1000))
     public void placeSellOrder(String stockCode, long quantity) throws IOException {
         String accessToken = kiwoomTokenService.getStoredAccessToken();
         if (accessToken == null || accessToken.isEmpty()) {
-            log.error("Access token is not available. Cannot place sell order.");
-            return;
+            log.error("Access token is not available. Cannot place sell order for stock: {}.", stockCode);
+            throw new IOException("Access token not available for sell order.");
         }
 
         String orderRequestBody = String.format("{\"CANO\":\"%s\",\"ACNT_PRDT_CD\":\"01\",\"PDNO\":\"%s\",\"ORD_DVSN\":\"01\",\"ORD_QTY\":\"%d\",\"ORD_UNPR\":\"0\"}", 
@@ -111,8 +116,9 @@ public class OrderServiceImpl implements OrderService {
             log.info("Sell order for {} placed. Response: {}", stockCode, orderResponse.body());
             removeTradeInfo(stockCode); // Remove from owned stocks after successful sell
         } catch (InterruptedException e) {
-            log.error("Error placing sell order for stock: {}", stockCode, e);
+            log.error("Error placing sell order for stock: {}. Interrupted.", stockCode, e);
             Thread.currentThread().interrupt();
+            throw new IOException("Interrupted during sell order for stock: " + stockCode, e);
         }
     }
 
@@ -161,8 +167,8 @@ public class OrderServiceImpl implements OrderService {
     private long getCurrentPrice(String stockCode) throws IOException {
         String accessToken = kiwoomTokenService.getStoredAccessToken();
         if (accessToken == null || accessToken.isEmpty()) {
-            log.error("Access token is not available. Cannot get current price.");
-            return 0;
+            log.error("Access token is not available. Cannot get current price for stock: {}.", stockCode);
+            throw new IOException("Access token not available for current price inquiry.");
         }
         String url = apiHost + "/uapi/domestic-stock/v1/quotations/inquire-price?fid_cond_mrkt_div_code=J&fid_input_iscd=" + stockCode;
         HttpRequest priceRequest = HttpRequest.newBuilder()
@@ -180,9 +186,9 @@ public class OrderServiceImpl implements OrderService {
             JsonNode priceResponseBody = objectMapper.readTree(priceResponse.body());
             return priceResponseBody.path("output").path("stck_prpr").asLong();
         } catch (InterruptedException e) {
-            log.error("Error getting current price for stock: {}", stockCode, e);
+            log.error("Error getting current price for stock: {}. Interrupted.", stockCode, e);
             Thread.currentThread().interrupt();
-            return 0;
+            throw new IOException("Interrupted during get current price for stock: " + stockCode, e);
         }
     }
 

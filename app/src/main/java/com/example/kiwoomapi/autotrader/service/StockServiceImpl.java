@@ -4,7 +4,11 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.retry.annotation.Backoff;
+import org.springframework.retry.annotation.Retryable;
 import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.retry.annotation.Backoff;
+import org.springframework.retry.annotation.Retryable;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
@@ -35,12 +39,13 @@ public class StockServiceImpl implements StockService {
 
     @Override
     @Scheduled(cron = "0 50 8 * * MON-FRI", zone = "Asia/Seoul")
+    @Retryable(value = {IOException.class}, maxAttempts = 3, backoff = @Backoff(delay = 1000))
     public void fetchAndStorePreviousDayUpperLimitStocks() throws IOException {
         log.info("Fetching previous day's upper limit stocks...");
         String accessToken = kiwoomTokenService.getStoredAccessToken();
         if (accessToken == null || accessToken.isEmpty()) {
             log.error("Access token is not available. Cannot fetch upper limit stocks.");
-            return;
+            throw new IOException("Access token not available."); // Throw exception to trigger retry
         }
 
         try {
@@ -72,10 +77,12 @@ public class StockServiceImpl implements StockService {
                 log.info("Successfully fetched and stored {} upper limit stocks.", upperLimitStocks.size());
             } else {
                 log.error("Failed to fetch upper limit stocks. Status code: {}, Response: {}", response.statusCode(), response.body());
+                throw new IOException("API call failed with status code: " + response.statusCode()); // Throw exception to trigger retry
             }
         } catch (IOException | InterruptedException e) {
             log.error("Error while fetching upper limit stocks", e);
             Thread.currentThread().interrupt();
+            throw new IOException("Error during API call.", e); // Re-throw to trigger retry
         }
     }
 

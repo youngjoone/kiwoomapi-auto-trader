@@ -45,13 +45,12 @@ public class KiwoomWebSocketClient {
         log.info("Received message: {}", message);
         try {
             JsonNode rootNode = objectMapper.readTree(message);
-            String trId = rootNode.path("tr_id").asText();
+            String trId = rootNode.path("trnm").asText(); // trnm for real-time messages
+            String stockCode = rootNode.path("item").asText(); // item for stock code
 
-            // Assuming a tr_id for real-time stock price, e.g., "realtime_stock_price"
-            // You need to consult Kiwoom API documentation for actual real-time TR ID
-            if ("realtime_stock_price".equals(trId)) { 
-                String stockCode = rootNode.path("stock_code").asText();
-                long currentPrice = rootNode.path("current_price").asLong();
+            if ("REAL".equals(trId)) { 
+                JsonNode values = rootNode.path("values");
+                long currentPrice = values.path("10").asLong(); // 10 for current price (현재가)
                 orderService.processRealtimeStockPrice(stockCode, currentPrice);
             }
         } catch (IOException e) {
@@ -81,8 +80,8 @@ public class KiwoomWebSocketClient {
     public void subscribeToRealtimeStockPrice(String stockCode) {
         String accessToken = kiwoomTokenService.getStoredAccessToken();
         if (session != null && session.isOpen() && accessToken != null) {
-            // You need to consult Kiwoom API documentation for actual real-time subscription message format
-            String subscribeMessage = String.format("{\"tr_id\":\"realtime_stock_price\",\"item\":\"%s\",\"authorization\":\"Bearer %s\"}", stockCode, accessToken);
+            // Kiwoom API real-time subscription message format for OB (주식체결)
+            String subscribeMessage = String.format("{\"trnm\":\"REG\",\"grp_no\":\"1\",\"refresh\":\"1\",\"data\":[{\"item\":\"%s\",\"type\":\"OB\"}]}", stockCode);
             try {
                 session.getBasicRemote().sendText(subscribeMessage);
                 log.info("Subscribed to real-time data for stock: {}", stockCode);

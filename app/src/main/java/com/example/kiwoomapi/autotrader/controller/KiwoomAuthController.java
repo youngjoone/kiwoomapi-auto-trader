@@ -5,10 +5,14 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.http.ResponseEntity;
+import org.springframework.http.HttpStatus;
+import java.io.IOException;
 
 @RestController
-@CrossOrigin(origins = "*") // 개발 환경에서 모든 출처 허용
+@RequestMapping("/api/v1/auth")
 public class KiwoomAuthController {
 
     @Value("${kiwoom.api.appkey}")
@@ -37,21 +41,25 @@ public class KiwoomAuthController {
 
     @GetMapping("/api/get-token")
     public String getToken() {
-        String storedToken = kiwoomTokenService.getStoredAccessToken();
-        if (storedToken != null && !storedToken.isEmpty()) {
-            return "Current Token: " + storedToken;
-        } else {
-            // If no token is stored, try to get a new one
-            String jsonData = String.format(
-                "{\"grant_type\" : \"client_credentials\",\"appkey\" : \"%s\",\"secretkey\" : \"%s\"}",
-                kiwoomAppkey, kiwoomSecretkey
-            );
-            String newToken = kiwoomTokenService.getAccessToken(jsonData);
-            if (newToken != null) {
-                return "New Token obtained: " + newToken;
+        try {
+            String storedToken = kiwoomTokenService.getStoredAccessToken();
+            if (storedToken != null && !storedToken.isEmpty()) {
+                return "Current Token: " + storedToken;
             } else {
-                return "Failed to obtain token.";
+                // If no token is stored, try to get a new one
+                String jsonData = String.format(
+                    "{\"grant_type\" : \"client_credentials\",\"appkey\" : \"%s\",\"secretkey\" : \"%s\"}",
+                    kiwoomAppkey, kiwoomSecretkey
+                );
+                String newToken = kiwoomTokenService.getAccessToken(jsonData);
+                if (newToken != null) {
+                    return "New Token obtained: " + newToken;
+                } else {
+                    return "Failed to obtain token.";
+                }
             }
+        } catch (IOException e) {
+            return "Error obtaining token: " + e.getMessage();
         }
     }
 }
