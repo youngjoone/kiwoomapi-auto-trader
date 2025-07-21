@@ -3,6 +3,7 @@ package com.example.kiwoomapi.autotrader.service;
 import com.example.kiwoomapi.autotrader.service.KiwoomTokenService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.io.OutputStream;
@@ -15,6 +16,31 @@ import java.util.Scanner;
 public class KiwoomTokenServiceImpl implements KiwoomTokenService {
 
     private String accessToken;
+    private long expiresIn; // Token expiration timestamp
+
+    @Value("${kiwoom.api.appkey}")
+    private String appKey;
+
+    @Value("${kiwoom.api.secretkey}")
+    private String appSecret;
+
+    @Value("${kiwoom.account.cano}")
+    private String account;
+
+    @Override
+    public String getAppKey() {
+        return appKey;
+    }
+
+    @Override
+    public String getAppSecret() {
+        return appSecret;
+    }
+
+    @Override
+    public String getAccount() {
+        return account;
+    }
 
     @Override
     public String getAccessToken(String jsonData) {
@@ -58,6 +84,8 @@ public class KiwoomTokenServiceImpl implements KiwoomTokenService {
                 ObjectMapper objectMapper = new ObjectMapper();
                 JsonNode rootNode = objectMapper.readTree(responseBody);
                 accessToken = rootNode.path("token").asText();
+                long expiresInSeconds = rootNode.path("expires_in").asLong(); // Assuming 'expires_in' is in seconds
+                expiresIn = System.currentTimeMillis() + (expiresInSeconds * 1000); // Convert to milliseconds
                 System.out.println("DEBUG: Access token set in service (full): [" + accessToken + "]");
                 return accessToken;
             }
@@ -70,6 +98,26 @@ public class KiwoomTokenServiceImpl implements KiwoomTokenService {
 
     @Override
     public String getStoredAccessToken() {
+        if (accessToken == null || System.currentTimeMillis() >= expiresIn) {
+            System.out.println("DEBUG: Access token expired or not available. Renewing...");
+            // In a real scenario, you would call getAccessToken with appropriate jsonData
+            // For now, let's simulate a renewal or throw an exception if jsonData is needed
+            // For simplicity, let's assume jsonData is not needed for renewal or is handled internally
+            try {
+                // Simulate token renewal. In a real app, this would be a proper API call.
+                String renewedToken = getAccessToken("{\"grant_type\":\"client_credentials\",\"appkey\":\"" + appKey + "\",\"secretkey\":\"" + appSecret + "\"}");
+                if (renewedToken != null) {
+                    System.out.println("DEBUG: Access token renewed successfully.");
+                    return renewedToken;
+                } else {
+                    System.err.println("DEBUG: Failed to renew access token.");
+                    return null;
+                }
+            } catch (Exception e) {
+                System.err.println("DEBUG: Exception during token renewal: " + e.getMessage());
+                return null;
+            }
+        }
         System.out.println("DEBUG: getStoredAccessToken called. Current token (full): [" + accessToken + "]");
         return accessToken;
     }
