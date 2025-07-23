@@ -1,4 +1,4 @@
-'''import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
 import AccountPage from './AccountPage';
 import UpperLimitStocksPage from './UpperLimitStocksPage';
 import TokenManager from './TokenManager';
@@ -34,4 +34,3 @@ function App() {
 }
 
 export default App;
-'''

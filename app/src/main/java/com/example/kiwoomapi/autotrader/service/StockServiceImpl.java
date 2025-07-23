@@ -48,7 +48,7 @@ public class StockServiceImpl implements StockService {
             throw new IOException("Access token not available.");
         }
 
-        String requestBody = "{\"mrkt_tp\":\"000\",\"updown_tp\":\"1\",\"sort_tp\":\"1\",\"stk_cnd\":\"0\",\"trde_qty_tp\":\"0000\",\"crd_cnd\":\"0\",\"trde_gold_tp\":\"0\",\"stex_tp\":\"0\"}";
+        String requestBody = "{\"mrkt_tp\":\"000\",\"updown_tp\":\"6\",\"sort_tp\":\"1\",\"stk_cnd\":\"0\",\"trde_qty_tp\":\"0000\",\"crd_cnd\":\"0\",\"trde_gold_tp\":\"0\",\"stex_tp\":\"0\"}";
         String responseBodyStr = "";
         String status = "ERROR";
         String errorMessage = null;
@@ -66,6 +66,8 @@ public class StockServiceImpl implements StockService {
 
             HttpResponse<String> response = HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
             responseBodyStr = response.body();
+            log.info("Kiwoom API Response Status Code: {}", response.statusCode());
+            log.info("Kiwoom API Response Body: {}", responseBodyStr);
 
             if (response.statusCode() == 200) {
                 JsonNode responseBodyJson = objectMapper.readTree(responseBodyStr);

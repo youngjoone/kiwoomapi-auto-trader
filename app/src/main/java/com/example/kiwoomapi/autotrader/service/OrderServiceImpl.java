@@ -8,6 +8,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.retry.annotation.Backoff;
 import org.springframework.retry.annotation.Retryable;
@@ -39,7 +40,7 @@ public class OrderServiceImpl implements OrderService {
     @Value("${kiwoom.order.loss-margin}")
     private double lossMargin;
 
-    public OrderServiceImpl(KiwoomTokenService kiwoomTokenService, UpperLimitBuyStrategy upperLimitBuyStrategy, TradeInfoRepository tradeInfoRepository, LogService logService) {
+    public OrderServiceImpl(KiwoomTokenService kiwoomTokenService, @Lazy UpperLimitBuyStrategy upperLimitBuyStrategy, TradeInfoRepository tradeInfoRepository, LogService logService) {
         this.kiwoomTokenService = kiwoomTokenService;
         this.upperLimitBuyStrategy = upperLimitBuyStrategy;
         this.tradeInfoRepository = tradeInfoRepository;

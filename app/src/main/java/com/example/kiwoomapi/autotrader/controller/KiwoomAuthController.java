@@ -29,7 +29,7 @@ public class KiwoomAuthController {
         return "Hello from Backend!";
     }
 
-    @GetMapping("/api/revoke-token")
+    @GetMapping("/revoke-token")
     public String revokeToken() {
         boolean revoked = kiwoomTokenService.revokeAccessToken();
         if (revoked) {
@@ -39,7 +39,7 @@ public class KiwoomAuthController {
         }
     }
 
-    @GetMapping("/api/get-token")
+    @GetMapping("/get-token")
     public String getToken() {
         try {
             String storedToken = kiwoomTokenService.getStoredAccessToken();

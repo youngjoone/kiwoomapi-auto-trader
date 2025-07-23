@@ -79,7 +79,7 @@ public class KiwoomTokenServiceImpl implements KiwoomTokenService {
             log.info("Response Code: {}", connection.getResponseCode());
 
             try (Scanner scanner = new Scanner(connection.getInputStream(), "utf-8")) {
-                responseBody = scanner.useDelimiter("\A").next();
+                responseBody = scanner.useDelimiter("\\A").next();
                 log.info("Response Body: {}", responseBody);
 
                 ObjectMapper objectMapper = new ObjectMapper();
@@ -110,7 +110,8 @@ public class KiwoomTokenServiceImpl implements KiwoomTokenService {
         if (accessToken == null || System.currentTimeMillis() >= expiresIn) {
             log.info("Access token expired or not available. Renewing...");
             try {
-                String renewedToken = getAccessToken("{"grant_type":"client_credentials","appkey":"" + appKey + "","secretkey":"" + appSecret + ""}");
+                String requestBody = String.format("{\"grant_type\":\"client_credentials\",\"appkey\":\"%s\",\"secretkey\":\"%s\"}", appKey, appSecret);
+                String renewedToken = getAccessToken(requestBody);
                 if (renewedToken != null) {
                     log.info("Access token renewed successfully.");
                     return renewedToken;
@@ -134,7 +135,7 @@ public class KiwoomTokenServiceImpl implements KiwoomTokenService {
             return false;
         }
 
-        String requestBody = "{"token":"" + accessToken + ""}";
+        String requestBody = String.format("{\"token\":\"%s\"}", accessToken);
         String responseBody = "";
         String status = "ERROR";
         String errorMessage = null;
@@ -166,7 +167,7 @@ public class KiwoomTokenServiceImpl implements KiwoomTokenService {
                 return true;
             } else {
                 try (Scanner scanner = new Scanner(connection.getErrorStream(), "utf-8")) {
-                    responseBody = scanner.useDelimiter("\A").next();
+                    responseBody = scanner.useDelimiter("\\A").next();
                     errorMessage = "Failed to revoke token. Error: " + responseBody;
                     log.error(errorMessage);
                 }
@@ -182,4 +183,3 @@ public class KiwoomTokenServiceImpl implements KiwoomTokenService {
         }
     }
 }
-''

@@ -1,11 +1,11 @@
-'''import { useState } from 'react';
+import { useState } from 'react';
 
 function TokenManager() {
     const [tokenStatus, setTokenStatus] = useState('Not fetched yet.');
 
     const handleGetToken = async () => {
         try {
-            const response = await fetch('/api/get-token');
+            const response = await fetch('/api/v1/auth/get-token');
             const data = await response.text();
             setTokenStatus(data);
         } catch (error) {
@@ -16,7 +16,7 @@ function TokenManager() {
 
     const handleRevokeToken = async () => {
         try {
-            const response = await fetch('/api/revoke-token');
+            const response = await fetch('/api/v1/auth/revoke-token');
             const data = await response.text();
             setTokenStatus(data);
         } catch (error) {
@@ -42,4 +42,3 @@ function TokenManager() {
 }
 
 export default TokenManager;
-'''
