@@ -1,6 +1,6 @@
 package com.example.kiwoomapi.autotrader.service;
 
-import com.example.kiwoomapi.autotrader.service.KiwoomTokenService;
+import com.example.kiwoomapi.autotrader.log.LogService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
@@ -13,7 +13,6 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
-import java.util.Arrays;
 import java.util.Scanner;
 
 @Slf4j
@@ -31,6 +30,12 @@ public class KiwoomTokenServiceImpl implements KiwoomTokenService {
 
     @Value("${kiwoom.account.cano}")
     private String account;
+
+    private final LogService logService;
+
+    public KiwoomTokenServiceImpl(LogService logService) {
+        this.logService = logService;
+    }
 
     @Override
     public String getAppKey() {
@@ -51,9 +56,10 @@ public class KiwoomTokenServiceImpl implements KiwoomTokenService {
     @Retryable(value = {IOException.class}, maxAttempts = 3, backoff = @Backoff(delay = 1000))
     public String getAccessToken(String jsonData) throws IOException {
         log.info("Attempting to get access token...");
+        String responseBody = "";
+        String status = "ERROR";
+        String errorMessage = null;
         try {
-            // 1. 요청할 API URL
-            // String host = "https://mockapi.kiwoom.com"; // 모의투자
             String host = "https://api.kiwoom.com"; // 실전투자
             String endpoint = "/oauth2/token";
             String urlString = host + endpoint;
@@ -61,121 +67,119 @@ public class KiwoomTokenServiceImpl implements KiwoomTokenService {
             URL url = new URL(urlString);
             HttpURLConnection connection = (HttpURLConnection) url.openConnection();
 
-            // 2. Header 데이터 설정
-            connection.setRequestMethod("POST"); // 메서드 타입
-            connection.setRequestProperty("Content-Type", "application/json;charset=UTF-8"); // 컨텐츠타입
+            connection.setRequestMethod("POST");
+            connection.setRequestProperty("Content-Type", "application/json;charset=UTF-8");
             connection.setDoOutput(true);
 
-            // 3. JSON 데이터 전송
             try (OutputStream os = connection.getOutputStream()) {
                 byte[] input = jsonData.getBytes("utf-8");
                 os.write(input, 0, input.length);
             }
 
-            // 4. 응답 헤더 출력
             log.info("Response Code: {}", connection.getResponseCode());
-            // System.out.println("Header:"); // Remove System.out.println
-            // String[] headerKeys = {"cont-yn","next-key","api-id"};
-            // connection.getHeaderFields().forEach((key, value) -> {
-            //     if(Arrays.asList(headerKeys).contains(key)){
-            //         System.out.println("    " + key + ": " + value.get(0));
-            //     }
-            // });
 
-            // 5. 응답 본문 출력 및 토큰 파싱
-            // System.out.println("Body:"); // Remove System.out.println
             try (Scanner scanner = new Scanner(connection.getInputStream(), "utf-8")) {
-                String responseBody = scanner.useDelimiter("\\A").next();
+                responseBody = scanner.useDelimiter("\A").next();
                 log.info("Response Body: {}", responseBody);
 
                 ObjectMapper objectMapper = new ObjectMapper();
                 JsonNode rootNode = objectMapper.readTree(responseBody);
                 accessToken = rootNode.path("token").asText();
-                long expiresInSeconds = rootNode.path("expires_in").asLong(); // Assuming 'expires_in' is in seconds
-                expiresIn = System.currentTimeMillis() + (expiresInSeconds * 1000); // Convert to milliseconds
+                long expiresInSeconds = rootNode.path("expires_in").asLong();
+                expiresIn = System.currentTimeMillis() + (expiresInSeconds * 1000);
                 log.info("Access token obtained successfully.");
+                status = "SUCCESS";
                 return accessToken;
             }
 
         } catch (IOException e) {
             log.error("IOException during get access token: {}", e.getMessage());
+            errorMessage = e.getMessage();
             throw e; // Re-throw to trigger retry
         } catch (Exception e) {
             log.error("Error during get access token: {}", e.getMessage());
+            errorMessage = e.getMessage();
             return null;
+        } finally {
+            logService.saveLog("getAccessToken", jsonData, responseBody, status, errorMessage);
         }
     }
 
     @Override
     public String getStoredAccessToken() {
         if (accessToken == null || System.currentTimeMillis() >= expiresIn) {
-            System.out.println("DEBUG: Access token expired or not available. Renewing...");
-            // In a real scenario, you would call getAccessToken with appropriate jsonData
-            // For now, let's simulate a renewal or throw an exception if jsonData is needed
-            // For simplicity, let's assume jsonData is not needed for renewal or is handled internally
+            log.info("Access token expired or not available. Renewing...");
             try {
-                // Simulate token renewal. In a real app, this would be a proper API call.
-                String renewedToken = getAccessToken("{\"grant_type\":\"client_credentials\",\"appkey\":\"" + appKey + "\",\"secretkey\":\"" + appSecret + "\"}");
+                String renewedToken = getAccessToken("{"grant_type":"client_credentials","appkey":"" + appKey + "","secretkey":"" + appSecret + ""}");
                 if (renewedToken != null) {
-                    System.out.println("DEBUG: Access token renewed successfully.");
+                    log.info("Access token renewed successfully.");
                     return renewedToken;
                 } else {
-                    System.err.println("DEBUG: Failed to renew access token.");
+                    log.error("Failed to renew access token.");
                     return null;
                 }
             } catch (Exception e) {
-                System.err.println("DEBUG: Exception during token renewal: " + e.getMessage());
+                log.error("Exception during token renewal: {}", e.getMessage());
                 return null;
             }
         }
-        System.out.println("DEBUG: getStoredAccessToken called. Current token (full): [" + accessToken + "]");
         return accessToken;
     }
 
     @Override
     public boolean revokeAccessToken() {
-        System.out.println("DEBUG: revokeAccessToken called. Token before check (full): [" + accessToken + "]");
+        log.info("Attempting to revoke access token...");
         if (accessToken == null || accessToken.isEmpty()) {
-            System.out.println("No access token to revoke.");
+            log.warn("No access token to revoke.");
             return false;
         }
 
+        String requestBody = "{"token":"" + accessToken + ""}";
+        String responseBody = "";
+        String status = "ERROR";
+        String errorMessage = null;
+
         try {
             String host = "https://api.kiwoom.com"; // 실전투자
-            String endpoint = "/oauth2/revoke"; // 키움 API 토큰 폐기 엔드포인트 (가정)
+            String endpoint = "/oauth2/revoke";
             String urlString = host + endpoint;
 
             URL url = new URL(urlString);
             HttpURLConnection connection = (HttpURLConnection) url.openConnection();
 
             connection.setRequestMethod("POST");
-            connection.setRequestProperty("Content-Type", "application/json;charset=UTF-8"); // 컨텐츠타입
+            connection.setRequestProperty("Content-Type", "application/json;charset=UTF-8");
             connection.setDoOutput(true);
 
-            String requestBody = "{\"token\":\"" + accessToken + "\"}";
             try (OutputStream os = connection.getOutputStream()) {
                 byte[] input = requestBody.getBytes("utf-8");
                 os.write(input, 0, input.length);
             }
 
             int responseCode = connection.getResponseCode();
-            System.out.println("Revoke Token Response Code: " + responseCode);
+            log.info("Revoke Token Response Code: {}", responseCode);
 
             if (responseCode == HttpURLConnection.HTTP_OK) {
-                System.out.println("Access token successfully revoked from Kiwoom API.");
-                this.accessToken = null; // 로컬 토큰 무효화
+                log.info("Access token successfully revoked from Kiwoom API.");
+                this.accessToken = null;
+                status = "SUCCESS";
                 return true;
             } else {
                 try (Scanner scanner = new Scanner(connection.getErrorStream(), "utf-8")) {
-                    String errorResponse = scanner.useDelimiter("\\A").next();
-                    System.err.println("Failed to revoke token. Error: " + errorResponse);
+                    responseBody = scanner.useDelimiter("\A").next();
+                    errorMessage = "Failed to revoke token. Error: " + responseBody;
+                    log.error(errorMessage);
                 }
                 return false;
             }
 
         } catch (Exception e) {
-            e.printStackTrace();
+            errorMessage = e.getMessage();
+            log.error("Error during token revocation: {}", errorMessage, e);
             return false;
+        } finally {
+            logService.saveLog("revokeAccessToken", requestBody, responseBody, status, errorMessage);
         }
     }
 }
+''

@@ -40,6 +40,7 @@ dependencies {
     implementation 'javax.websocket:javax.websocket-api:1.1'
     implementation 'org.springframework.retry:spring-retry'
     implementation 'org.springframework:spring-aspects' // Required for @Retryable
+    runtimeOnly 'com.h2database:h2'
 }
 
 tasks.named('test') {
