@@ -3,12 +3,14 @@ package com.example.kiwoomapi.autotrader.strategy;
 import com.example.kiwoomapi.autotrader.controller.StockData;
 import com.example.kiwoomapi.autotrader.service.OrderService;
 import com.example.kiwoomapi.autotrader.service.StockService;
+import com.example.kiwoomapi.autotrader.service.StrategyStatusService; // StrategyStatusService import 추가
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.beans.factory.annotation.Value;
 
 import java.io.IOException;
+import java.time.LocalDateTime; // LocalDateTime import 추가
 import java.util.List;
 
 @Slf4j
@@ -17,19 +19,22 @@ public class DailyUpperLimitBuyStrategy implements TradingStrategy {
 
     private final StockService stockService;
     private final OrderService orderService;
+    private final StrategyStatusService strategyStatusService; // StrategyStatusService 필드 추가
 
     @Value("${kiwoom.order.total-amount}")
     private long totalInvestmentAmount;
 
-    public DailyUpperLimitBuyStrategy(StockService stockService, OrderService orderService) {
+    public DailyUpperLimitBuyStrategy(StockService stockService, OrderService orderService, StrategyStatusService strategyStatusService) {
         this.stockService = stockService;
         this.orderService = orderService;
+        this.strategyStatusService = strategyStatusService;
     }
 
     @Override
     @Scheduled(cron = "0 0 9 ? * MON-FRI", zone = "Asia/Seoul") // 월-금 오전 9시
     public void execute() throws IOException {
         log.info("DailyUpperLimitBuyStrategy executed at 9:00 AM.");
+        strategyStatusService.setLastStrategyRunTime(LocalDateTime.now()); // 전략 실행 시간 업데이트
         List<StockData> upperLimitStocks = stockService.getUpperLimitStocks();
 
         if (upperLimitStocks.isEmpty()) {
