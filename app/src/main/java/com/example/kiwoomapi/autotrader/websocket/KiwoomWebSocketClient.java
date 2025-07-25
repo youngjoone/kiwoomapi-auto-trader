@@ -26,6 +26,9 @@ import java.util.concurrent.TimeUnit;
 public class KiwoomWebSocketClient {
 
     private Session session;
+    public Session getSession() {
+        return session;
+    }
     private final KiwoomTokenService kiwoomTokenService;
     private final OrderService orderService;
     private final ObjectMapper objectMapper = new ObjectMapper();
@@ -98,7 +101,9 @@ public class KiwoomWebSocketClient {
     public void connect() {
         try {
             WebSocketContainer container = ContainerProvider.getWebSocketContainer();
-            container.connectToServer(this, URI.create(websocketHost));
+            Session newSession = container.connectToServer(this, URI.create(websocketHost));
+            this.session = newSession; // 연결 성공 시 session 업데이트
+            log.info("Successfully connected to WebSocket: {}", newSession.getId());
         } catch (DeploymentException | IOException e) {
             log.error("Error connecting to WebSocket: {}", e.getMessage(), e);
             reconnect();

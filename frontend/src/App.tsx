@@ -4,6 +4,10 @@ import UpperLimitStocksPage from './UpperLimitStocksPage';
 import TokenManager from './TokenManager';
 import TradeHistoryPage from './TradeHistoryPage';
 import HoldingsPage from './HoldingsPage';
+import SettingsPage from './SettingsPage';
+import DashboardPage from './DashboardPage';
+import LogPage from './LogPage';
+import SystemStatusPage from './SystemStatusPage';
 
 function App() {
     return (
@@ -26,6 +30,18 @@ function App() {
                         <li>
                             <Link to="/holdings">Holdings</Link>
                         </li>
+                        <li>
+                            <Link to="/settings">Settings</Link>
+                        </li>
+                        <li>
+                            <Link to="/dashboard">Dashboard</Link>
+                        </li>
+                        <li>
+                            <Link to="/logs">Logs</Link>
+                        </li>
+                        <li>
+                            <Link to="/status">System Status</Link>
+                        </li>
                     </ul>
                 </nav>
 
@@ -37,6 +53,10 @@ function App() {
                     <Route path="/upper-limit-stocks" element={<UpperLimitStocksPage />} />
                     <Route path="/trade-history" element={<TradeHistoryPage />} />
                     <Route path="/holdings" element={<HoldingsPage />} />
+                    <Route path="/settings" element={<SettingsPage />} />
+                    <Route path="/dashboard" element={<DashboardPage />} />
+                    <Route path="/logs" element={<LogPage />} />
+                    <Route path="/status" element={<SystemStatusPage />} />
                 </Routes>
             </div>
         </Router>

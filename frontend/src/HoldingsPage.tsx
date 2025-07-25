@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import SockJS from 'sockjs-client';
-import { Client } from 'stompjs';
+import * as Stomp from 'stompjs';
 
 interface HoldingInfoData {
     stockCode: string;
@@ -16,7 +16,7 @@ const HoldingsPage: React.FC = () => {
     const [holdings, setHoldings] = useState<HoldingInfoData[]>([]);
     const [loading, setLoading] = useState<boolean>(true);
     const [error, setError] = useState<string | null>(null);
-    const [stompClient, setStompClient] = useState<Client | null>(null);
+    const [stompClient, setStompClient] = useState<Stomp.Client | null>(null);
 
     useEffect(() => {
         // 초기 데이터 로드 (REST API)
