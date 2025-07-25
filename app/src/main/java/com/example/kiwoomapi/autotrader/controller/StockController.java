@@ -8,6 +8,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/v1/stock")
@@ -20,11 +21,11 @@ public class StockController {
     }
 
     @GetMapping("/upper-limit")
-    public ResponseEntity<List<String>> getUpperLimitStocks() {
+    public ResponseEntity<List<StockData>> getUpperLimitStocks() throws InterruptedException {
         try {
             stockService.fetchAndStorePreviousDayUpperLimitStocks();
-            List<String> upperLimitStockCodes = stockService.getUpperLimitStockCodes();
-            return ResponseEntity.ok(upperLimitStockCodes);
+            List<StockData> upperLimitStocks = stockService.getUpperLimitStocks();
+            return ResponseEntity.ok(upperLimitStocks);
         } catch (IOException e) {
             return ResponseEntity.status(500).body(null);
         }

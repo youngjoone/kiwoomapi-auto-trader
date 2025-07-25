@@ -1,9 +1,9 @@
 package com.example.kiwoomapi.autotrader.strategy;
 
+import com.example.kiwoomapi.autotrader.controller.StockData;
 import com.example.kiwoomapi.autotrader.service.KiwoomTokenService;
 import com.example.kiwoomapi.autotrader.service.OrderService;
 import com.example.kiwoomapi.autotrader.service.StockService;
-import com.example.kiwoomapi.autotrader.service.StockServiceImpl;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
@@ -16,6 +16,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Component
@@ -40,7 +41,9 @@ public class UpperLimitBuyStrategy implements TradingStrategy {
 
     @Override
     public void execute() throws IOException {
-        List<String> stockCodes = ((StockServiceImpl) stockService).getUpperLimitStockCodes();
+        List<String> stockCodes = stockService.getUpperLimitStocks().stream()
+                .map(StockData::getStk_cd)
+                .collect(Collectors.toList());
         if (stockCodes.isEmpty()) {
             log.info("No upper limit stocks to buy.");
             return;

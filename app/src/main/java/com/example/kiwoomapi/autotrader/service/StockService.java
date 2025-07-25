@@ -5,6 +5,6 @@ import java.util.List;
 
 public interface StockService {
 
-    void fetchAndStorePreviousDayUpperLimitStocks() throws IOException;
-    List<String> getUpperLimitStockCodes();
+    void fetchAndStorePreviousDayUpperLimitStocks() throws IOException, InterruptedException;
+    List<com.example.kiwoomapi.autotrader.controller.StockData> getUpperLimitStocks();
 }

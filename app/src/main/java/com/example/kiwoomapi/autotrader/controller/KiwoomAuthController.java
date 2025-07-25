@@ -30,21 +30,26 @@ public class KiwoomAuthController {
     }
 
     @GetMapping("/revoke-token")
-    public String revokeToken() {
-        boolean revoked = kiwoomTokenService.revokeAccessToken();
-        if (revoked) {
-            return "Token revoked successfully.";
-        } else {
-            return "Failed to revoke token or no token to revoke.";
+    public ResponseEntity<String> revokeToken() {
+        try {
+            boolean revoked = kiwoomTokenService.revokeAccessToken();
+            if (revoked) {
+                return ResponseEntity.ok("Token revoked successfully.");
+            } else {
+                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Failed to revoke token or no token to revoke.");
+            }
+        } catch (IOException | InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error revoking token: " + e.getMessage());
         }
     }
 
     @GetMapping("/get-token")
-    public String getToken() {
+    public ResponseEntity<String> getToken() {
         try {
             String storedToken = kiwoomTokenService.getStoredAccessToken();
             if (storedToken != null && !storedToken.isEmpty()) {
-                return "Current Token: " + storedToken;
+                return ResponseEntity.ok("Current Token: " + storedToken);
             } else {
                 // If no token is stored, try to get a new one
                 String jsonData = String.format(
@@ -53,13 +58,14 @@ public class KiwoomAuthController {
                 );
                 String newToken = kiwoomTokenService.getAccessToken(jsonData);
                 if (newToken != null) {
-                    return "New Token obtained: " + newToken;
+                    return ResponseEntity.ok("New Token obtained: " + newToken);
                 } else {
-                    return "Failed to obtain token.";
+                    return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Failed to obtain token.");
                 }
             }
-        } catch (IOException e) {
-            return "Error obtaining token: " + e.getMessage();
+        } catch (IOException | InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error obtaining token: " + e.getMessage());
         }
     }
 }

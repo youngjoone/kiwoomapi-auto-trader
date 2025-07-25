@@ -1,5 +1,6 @@
 package com.example.kiwoomapi.autotrader.service;
 
+import com.example.kiwoomapi.autotrader.http.HttpClientService;
 import com.example.kiwoomapi.autotrader.log.LogService;
 import com.example.kiwoomapi.autotrader.model.TradeInfo;
 import com.example.kiwoomapi.autotrader.model.TradeInfoRepository;
@@ -30,6 +31,7 @@ public class OrderServiceImpl implements OrderService {
     private final UpperLimitBuyStrategy upperLimitBuyStrategy;
     private final TradeInfoRepository tradeInfoRepository;
     private final LogService logService;
+    private final HttpClientService httpClientService;
 
     @Value("${kiwoom.api.host}")
     private String apiHost;
@@ -40,11 +42,12 @@ public class OrderServiceImpl implements OrderService {
     @Value("${kiwoom.order.loss-margin}")
     private double lossMargin;
 
-    public OrderServiceImpl(KiwoomTokenService kiwoomTokenService, @Lazy UpperLimitBuyStrategy upperLimitBuyStrategy, TradeInfoRepository tradeInfoRepository, LogService logService) {
+    public OrderServiceImpl(KiwoomTokenService kiwoomTokenService, @Lazy UpperLimitBuyStrategy upperLimitBuyStrategy, TradeInfoRepository tradeInfoRepository, LogService logService, HttpClientService httpClientService) {
         this.kiwoomTokenService = kiwoomTokenService;
         this.upperLimitBuyStrategy = upperLimitBuyStrategy;
         this.tradeInfoRepository = tradeInfoRepository;
         this.logService = logService;
+        this.httpClientService = httpClientService;
     }
 
     @Scheduled(cron = "0 0 9 * * MON-FRI", zone = "Asia/Seoul")
@@ -85,7 +88,7 @@ public class OrderServiceImpl implements OrderService {
         String errorMessage = null;
 
         try {
-            HttpResponse<String> orderResponse = HttpClient.newHttpClient().send(orderRequest, HttpResponse.BodyHandlers.ofString());
+            HttpResponse<String> orderResponse = httpClientService.send(orderRequest);
             responseBody = orderResponse.body();
             log.info("Buy order for {} placed. Response: {}", stockCode, responseBody);
             addTradeInfo(new TradeInfo(stockCode, buyPrice, quantity, System.currentTimeMillis()));
@@ -128,7 +131,7 @@ public class OrderServiceImpl implements OrderService {
         String errorMessage = null;
 
         try {
-            HttpResponse<String> orderResponse = HttpClient.newHttpClient().send(orderRequest, HttpResponse.BodyHandlers.ofString());
+            HttpResponse<String> orderResponse = httpClientService.send(orderRequest);
             responseBody = orderResponse.body();
             log.info("Sell order for {} placed. Response: {}", stockCode, responseBody);
             removeTradeInfo(stockCode);
@@ -204,7 +207,7 @@ public class OrderServiceImpl implements OrderService {
         String errorMessage = null;
 
         try {
-            HttpResponse<String> priceResponse = HttpClient.newHttpClient().send(priceRequest, HttpResponse.BodyHandlers.ofString());
+            HttpResponse<String> priceResponse = httpClientService.send(priceRequest);
             responseBody = priceResponse.body();
             JsonNode priceResponseBody = objectMapper.readTree(responseBody);
             status = "SUCCESS";

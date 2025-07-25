@@ -9,11 +9,10 @@ import org.springframework.retry.annotation.Backoff;
 import org.springframework.retry.annotation.Retryable;
 import org.springframework.stereotype.Service;
 
+import com.example.kiwoomapi.autotrader.http.HttpClientService;
 import java.io.IOException;
-import java.io.OutputStream;
-import java.net.HttpURLConnection;
-import java.net.URL;
-import java.util.Scanner;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 
 @Slf4j
 @Service
@@ -32,9 +31,11 @@ public class KiwoomTokenServiceImpl implements KiwoomTokenService {
     private String account;
 
     private final LogService logService;
+    private final HttpClientService httpClientService;
 
-    public KiwoomTokenServiceImpl(LogService logService) {
+    public KiwoomTokenServiceImpl(LogService logService, HttpClientService httpClientService) {
         this.logService = logService;
+        this.httpClientService = httpClientService;
     }
 
     @Override
@@ -54,7 +55,7 @@ public class KiwoomTokenServiceImpl implements KiwoomTokenService {
 
     @Override
     @Retryable(value = {IOException.class}, maxAttempts = 3, backoff = @Backoff(delay = 1000))
-    public String getAccessToken(String jsonData) throws IOException {
+    public String getAccessToken(String jsonData) throws IOException, InterruptedException {
         log.info("Attempting to get access token...");
         String responseBody = "";
         String status = "ERROR";
@@ -64,24 +65,17 @@ public class KiwoomTokenServiceImpl implements KiwoomTokenService {
             String endpoint = "/oauth2/token";
             String urlString = host + endpoint;
 
-            URL url = new URL(urlString);
-            HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(java.net.URI.create(urlString))
+                    .header("Content-Type", "application/json;charset=UTF-8")
+                    .POST(HttpRequest.BodyPublishers.ofString(jsonData))
+                    .build();
 
-            connection.setRequestMethod("POST");
-            connection.setRequestProperty("Content-Type", "application/json;charset=UTF-8");
-            connection.setDoOutput(true);
+            HttpResponse<String> response = httpClientService.send(request);
+            responseBody = response.body();
+            log.info("Response Code: {}", response.statusCode());
 
-            try (OutputStream os = connection.getOutputStream()) {
-                byte[] input = jsonData.getBytes("utf-8");
-                os.write(input, 0, input.length);
-            }
-
-            log.info("Response Code: {}", connection.getResponseCode());
-
-            try (Scanner scanner = new Scanner(connection.getInputStream(), "utf-8")) {
-                responseBody = scanner.useDelimiter("\\A").next();
-                log.info("Response Body: {}", responseBody);
-
+            if (response.statusCode() == 200) {
                 ObjectMapper objectMapper = new ObjectMapper();
                 JsonNode rootNode = objectMapper.readTree(responseBody);
                 accessToken = rootNode.path("token").asText();
@@ -90,9 +84,14 @@ public class KiwoomTokenServiceImpl implements KiwoomTokenService {
                 log.info("Access token obtained successfully.");
                 status = "SUCCESS";
                 return accessToken;
+            } else {
+                errorMessage = "Failed to obtain token. Status code: " + response.statusCode() + ", Response: " + responseBody;
+                log.error(errorMessage);
+                status = "ERROR";
+                return null;
             }
 
-        } catch (IOException e) {
+        } catch (IOException | InterruptedException e) {
             log.error("IOException during get access token: {}", e.getMessage());
             errorMessage = e.getMessage();
             throw e; // Re-throw to trigger retry
@@ -128,10 +127,11 @@ public class KiwoomTokenServiceImpl implements KiwoomTokenService {
     }
 
     @Override
-    public boolean revokeAccessToken() {
+    public boolean revokeAccessToken() throws IOException, InterruptedException {
         log.info("Attempting to revoke access token...");
         if (accessToken == null || accessToken.isEmpty()) {
             log.warn("No access token to revoke.");
+            logService.saveLog("revokeAccessToken", "", "", "ERROR", "No token to revoke.");
             return false;
         }
 
@@ -145,36 +145,29 @@ public class KiwoomTokenServiceImpl implements KiwoomTokenService {
             String endpoint = "/oauth2/revoke";
             String urlString = host + endpoint;
 
-            URL url = new URL(urlString);
-            HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(java.net.URI.create(urlString))
+                    .header("Content-Type", "application/json;charset=UTF-8")
+                    .POST(HttpRequest.BodyPublishers.ofString(requestBody))
+                    .build();
 
-            connection.setRequestMethod("POST");
-            connection.setRequestProperty("Content-Type", "application/json;charset=UTF-8");
-            connection.setDoOutput(true);
-
-            try (OutputStream os = connection.getOutputStream()) {
-                byte[] input = requestBody.getBytes("utf-8");
-                os.write(input, 0, input.length);
-            }
-
-            int responseCode = connection.getResponseCode();
+            HttpResponse<String> response = httpClientService.send(request);
+            int responseCode = response.statusCode();
+            responseBody = response.body();
             log.info("Revoke Token Response Code: {}", responseCode);
 
-            if (responseCode == HttpURLConnection.HTTP_OK) {
+            if (responseCode == 200) {
                 log.info("Access token successfully revoked from Kiwoom API.");
                 this.accessToken = null;
                 status = "SUCCESS";
                 return true;
             } else {
-                try (Scanner scanner = new Scanner(connection.getErrorStream(), "utf-8")) {
-                    responseBody = scanner.useDelimiter("\\A").next();
-                    errorMessage = "Failed to revoke token. Error: " + responseBody;
-                    log.error(errorMessage);
-                }
+                errorMessage = "Failed to revoke token. Error: " + responseBody;
+                log.error(errorMessage);
                 return false;
             }
 
-        } catch (Exception e) {
+        } catch (IOException | InterruptedException e) {
             errorMessage = e.getMessage();
             log.error("Error during token revocation: {}", errorMessage, e);
             return false;

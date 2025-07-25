@@ -1,5 +1,6 @@
 package com.example.kiwoomapi.autotrader.log;
 
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -21,7 +22,9 @@ public class LogEntry {
     private LocalDateTime timestamp;
     private String apiId;
     private String request;
+    @Column(length = 1000)
     private String response;
     private String status;
+    @Column(length = 2000)
     private String errorMessage;
 }
