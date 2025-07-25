@@ -55,12 +55,6 @@ public class App {
                 System.err.println("Failed to obtain Kiwoom API Access Token.");
             }
 
-            // 보유 종목 더미 데이터 추가
-            System.out.println("Adding dummy owned stocks data...");
-            tradeInfoRepository.save(new TradeInfo("005930", "삼성전자", 70000, 10, System.currentTimeMillis() - 86400000L));
-            tradeInfoRepository.save(new TradeInfo("000660", "SK하이닉스", 100000, 5, System.currentTimeMillis() - 172800000L));
-            tradeInfoRepository.save(new TradeInfo("035420", "NAVER", 200000, 3, System.currentTimeMillis() - 259200000L));
-            System.out.println("Dummy owned stocks data added.");
         };
     }
 }
