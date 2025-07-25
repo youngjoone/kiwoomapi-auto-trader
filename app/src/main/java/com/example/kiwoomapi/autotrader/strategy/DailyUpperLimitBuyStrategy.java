@@ -3,14 +3,15 @@ package com.example.kiwoomapi.autotrader.strategy;
 import com.example.kiwoomapi.autotrader.controller.StockData;
 import com.example.kiwoomapi.autotrader.service.OrderService;
 import com.example.kiwoomapi.autotrader.service.StockService;
-import com.example.kiwoomapi.autotrader.service.StrategyStatusService; // StrategyStatusService import 추가
+import com.example.kiwoomapi.autotrader.service.StrategyStatusService;
+import com.example.kiwoomapi.autotrader.service.SettingsService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.beans.factory.annotation.Value;
 
 import java.io.IOException;
-import java.time.LocalDateTime; // LocalDateTime import 추가
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Slf4j
@@ -19,15 +20,14 @@ public class DailyUpperLimitBuyStrategy implements TradingStrategy {
 
     private final StockService stockService;
     private final OrderService orderService;
-    private final StrategyStatusService strategyStatusService; // StrategyStatusService 필드 추가
+    private final StrategyStatusService strategyStatusService;
+    private final SettingsService settingsService;
 
-    @Value("${kiwoom.order.total-amount}")
-    private long totalInvestmentAmount;
-
-    public DailyUpperLimitBuyStrategy(StockService stockService, OrderService orderService, StrategyStatusService strategyStatusService) {
+    public DailyUpperLimitBuyStrategy(StockService stockService, OrderService orderService, StrategyStatusService strategyStatusService, SettingsService settingsService) {
         this.stockService = stockService;
         this.orderService = orderService;
         this.strategyStatusService = strategyStatusService;
+        this.settingsService = settingsService;
     }
 
     @Override
@@ -42,7 +42,7 @@ public class DailyUpperLimitBuyStrategy implements TradingStrategy {
             return;
         }
 
-        // 실제 구현에서는 계좌 잔고, 종목별 최소/최대 주문 수량 등을 고려해야 합니다.
+        long totalInvestmentAmount = settingsService.getSettings().getTotalAmount(); // SettingsService에서 가져오기
         long amountPerStock = totalInvestmentAmount / upperLimitStocks.size();
 
         for (StockData stock : upperLimitStocks) {

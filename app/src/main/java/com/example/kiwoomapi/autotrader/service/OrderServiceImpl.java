@@ -7,6 +7,7 @@ import com.example.kiwoomapi.autotrader.model.TradeInfoRepository;
 import com.example.kiwoomapi.autotrader.model.TradeHistory;
 import com.example.kiwoomapi.autotrader.model.TradeHistoryRepository;
 import com.example.kiwoomapi.autotrader.websocket.KiwoomWebSocketClient;
+import com.example.kiwoomapi.autotrader.controller.HoldingInfo;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
@@ -14,6 +15,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.retry.annotation.Backoff;
 import org.springframework.retry.annotation.Retryable;
 import org.springframework.stereotype.Service;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 
 import java.io.IOException;
 import java.net.URI;
@@ -33,23 +35,28 @@ public class OrderServiceImpl implements OrderService {
     private final LogService logService;
     private final HttpClientService httpClientService;
     private final KiwoomWebSocketClient kiwoomWebSocketClient;
+    private final SimpMessagingTemplate messagingTemplate;
+    private final SettingsService settingsService; // SettingsService 필드 추가
 
     @Value("${kiwoom.api.host}")
     private String apiHost;
 
-    @Value("${kiwoom.order.profit-margin}")
-    private double profitMargin;
+    // @Value로 주입받던 profitMargin과 lossMargin을 SettingsService에서 가져오도록 변경
+    // @Value("${kiwoom.order.profit-margin}")
+    // private double profitMargin;
 
-    @Value("${kiwoom.order.loss-margin}")
-    private double lossMargin;
+    // @Value("${kiwoom.order.loss-margin}")
+    // private double lossMargin;
 
-    public OrderServiceImpl(KiwoomTokenService kiwoomTokenService, TradeInfoRepository tradeInfoRepository, TradeHistoryRepository tradeHistoryRepository, LogService logService, HttpClientService httpClientService, KiwoomWebSocketClient kiwoomWebSocketClient) {
+    public OrderServiceImpl(KiwoomTokenService kiwoomTokenService, TradeInfoRepository tradeInfoRepository, TradeHistoryRepository tradeHistoryRepository, LogService logService, HttpClientService httpClientService, KiwoomWebSocketClient kiwoomWebSocketClient, SimpMessagingTemplate messagingTemplate, SettingsService settingsService) {
         this.kiwoomTokenService = kiwoomTokenService;
         this.tradeInfoRepository = tradeInfoRepository;
         this.tradeHistoryRepository = tradeHistoryRepository;
         this.logService = logService;
         this.httpClientService = httpClientService;
         this.kiwoomWebSocketClient = kiwoomWebSocketClient;
+        this.messagingTemplate = messagingTemplate;
+        this.settingsService = settingsService;
     }
 
     @Override
@@ -203,7 +210,23 @@ public class OrderServiceImpl implements OrderService {
     public void processRealtimeStockPrice(com.example.kiwoomapi.autotrader.controller.StockData stockData) throws IOException {
         tradeInfoRepository.findById(stockData.getStk_cd()).ifPresent(tradeInfo -> {
             try {
-                checkAndPlaceSellOrder(tradeInfo, Long.parseLong(stockData.getCur_prc()));
+                long currentPrice = Long.parseLong(stockData.getCur_prc()); // 웹소켓에서 받은 현재가 사용
+                double profitLoss = (currentPrice - tradeInfo.getBuyPrice()) * tradeInfo.getQuantity();
+                double profitLossPercentage = ((double) (currentPrice - tradeInfo.getBuyPrice()) / tradeInfo.getBuyPrice()) * 100;
+
+                // HoldingInfo 객체 생성 및 WebSocket으로 발행
+                HoldingInfo holdingInfo = new HoldingInfo(
+                    tradeInfo.getStockCode(),
+                    tradeInfo.getStockName(),
+                    currentPrice,
+                    tradeInfo.getBuyPrice(),
+                    tradeInfo.getQuantity(),
+                    profitLoss,
+                    profitLossPercentage
+                );
+                messagingTemplate.convertAndSend("/topic/holdings", holdingInfo); // WebSocket으로 발행
+
+                checkAndPlaceSellOrder(tradeInfo, currentPrice);
             } catch (IOException e) {
                 log.error("Error processing real-time stock price for {}", stockData.getStk_cd(), e);
             }
@@ -292,10 +315,10 @@ public class OrderServiceImpl implements OrderService {
     private void checkAndPlaceSellOrder(TradeInfo tradeInfo, long currentPrice) throws IOException {
         double profitLossPercentage = ((double) (currentPrice - tradeInfo.getBuyPrice()) / tradeInfo.getBuyPrice()) * 100;
 
-        if (profitLossPercentage >= profitMargin) {
+        if (profitLossPercentage >= settingsService.getSettings().getProfitMargin()) {
             log.info("Profit target reached for {}. Placing sell order.", tradeInfo.getStockCode());
             placeSellOrder(tradeInfo.getStockCode(), tradeInfo.getQuantity());
-        } else if (profitLossPercentage <= lossMargin) {
+        } else if (profitLossPercentage <= settingsService.getSettings().getLossMargin()) {
             log.info("Loss limit reached for {}. Placing sell order.", tradeInfo.getStockCode());
             placeSellOrder(tradeInfo.getStockCode(), tradeInfo.getQuantity());
         }
