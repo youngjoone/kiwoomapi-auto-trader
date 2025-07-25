@@ -12,4 +12,5 @@ public interface OrderService {
     void startRealtimeMonitoring();
     void processRealtimeStockPrice(com.example.kiwoomapi.autotrader.controller.StockData stockData) throws IOException;
     void unsubscribeRealtimeStockPrice(String stockCode, String type);
+    long getCurrentPrice(String stockCode) throws IOException;
 }

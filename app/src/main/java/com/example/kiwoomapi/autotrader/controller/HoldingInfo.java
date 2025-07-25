@@ -1,7 +1,5 @@
-package com.example.kiwoomapi.autotrader.model;
+package com.example.kiwoomapi.autotrader.controller;
 
-import jakarta.persistence.Entity;
-import jakarta.persistence.Id;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -9,12 +7,12 @@ import lombok.NoArgsConstructor;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-@Entity
-public class TradeInfo {
-    @Id
+public class HoldingInfo {
     private String stockCode;
     private String stockName;
+    private long currentPrice;
     private long buyPrice;
     private long quantity;
-    private long buyTimestamp;
+    private double profitLoss;
+    private double profitLossPercentage;
 }

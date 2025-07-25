@@ -9,6 +9,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+import org.springframework.context.annotation.Lazy;
 
 import javax.websocket.*;
 import java.io.IOException;
@@ -34,7 +35,7 @@ public class KiwoomWebSocketClient {
     @Value("${kiwoom.api.websocket-host}")
     private String websocketHost;
 
-    public KiwoomWebSocketClient(KiwoomTokenService kiwoomTokenService, OrderService orderService) {
+    public KiwoomWebSocketClient(KiwoomTokenService kiwoomTokenService, @Lazy OrderService orderService) {
         this.kiwoomTokenService = kiwoomTokenService;
         this.orderService = orderService;
     }
