@@ -7,8 +7,5 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 class AppTest {
-    @Test void appHasAGreeting() {
-        App classUnderTest = new App();
-        assertEquals("Hello from Backend!", classUnderTest.hello(), "app should return 'Hello from Backend!'");
-    }
+    // No tests for App class after refactoring
 }
