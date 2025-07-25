@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import SockJS from 'sockjs-client';
+import { Client } from 'stompjs';
 
 interface HoldingInfoData {
     stockCode: string;
@@ -14,8 +16,10 @@ const HoldingsPage: React.FC = () => {
     const [holdings, setHoldings] = useState<HoldingInfoData[]>([]);
     const [loading, setLoading] = useState<boolean>(true);
     const [error, setError] = useState<string | null>(null);
+    const [stompClient, setStompClient] = useState<Client | null>(null);
 
     useEffect(() => {
+        // 초기 데이터 로드 (REST API)
         const fetchHoldings = async () => {
             try {
                 const response = await fetch('/api/v1/holdings');
@@ -32,7 +36,44 @@ const HoldingsPage: React.FC = () => {
         };
 
         fetchHoldings();
-    }, []);
+
+        // WebSocket 연결 및 구독
+        const socket = new SockJS('http://localhost:8080/ws'); // 백엔드 WebSocket 엔드포인트의 절대 경로
+        const client = Stomp.over(socket);
+
+        client.connect({}, () => {
+            console.log('Connected to WebSocket');
+            setStompClient(client);
+
+            client.subscribe('/topic/holdings', (message) => {
+                const updatedHolding: HoldingInfoData = JSON.parse(message.body);
+                setHoldings(prevHoldings => {
+                    const existingIndex = prevHoldings.findIndex(h => h.stockCode === updatedHolding.stockCode);
+                    if (existingIndex > -1) {
+                        // 기존 종목 업데이트
+                        const newHoldings = [...prevHoldings];
+                        newHoldings[existingIndex] = updatedHolding;
+                        return newHoldings;
+                    } else {
+                        // 새로운 종목 추가
+                        return [...prevHoldings, updatedHolding];
+                    }
+                });
+            });
+        }, (err: any) => {
+            console.error('WebSocket connection error:', err);
+            setError('WebSocket 연결 오류 발생.');
+        });
+
+        // 컴포넌트 언마운트 시 WebSocket 연결 해제
+        return () => {
+            if (stompClient && stompClient.connected) {
+                stompClient.disconnect(() => {
+                    console.log('Disconnected from WebSocket');
+                });
+            }
+        };
+    }, []); // stompClient를 의존성 배열에 추가하지 않음 (연결은 한 번만)
 
     if (loading) {
         return <div className="container mx-auto p-4">로딩 중...</div>;
@@ -62,7 +103,7 @@ const HoldingsPage: React.FC = () => {
                     </thead>
                     <tbody>
                         {holdings.map((holding, index) => (
-                            <tr key={index} className="hover:bg-gray-100">
+                            <tr key={holding.stockCode} className="hover:bg-gray-100">
                                 <td className="py-2 px-4 border-b">{holding.stockCode}</td>
                                 <td className="py-2 px-4 border-b">{holding.stockName || '알 수 없음'}</td>
                                 <td className="py-2 px-4 border-b text-right">{holding.currentPrice.toLocaleString()}</td>
