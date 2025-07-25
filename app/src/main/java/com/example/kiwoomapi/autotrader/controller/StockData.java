@@ -20,4 +20,5 @@ public class StockData {
     private String buy_bid;
     private String high_pric;
     private String low_pric;
+    private String open_pric;
 }

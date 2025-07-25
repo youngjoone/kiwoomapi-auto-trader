@@ -10,5 +10,6 @@ public interface OrderService {
     void addTradeInfo(TradeInfo tradeInfo);
     void removeTradeInfo(String stockCode);
     void startRealtimeMonitoring();
-    void processRealtimeStockPrice(String stockCode, long currentPrice) throws IOException;
+    void processRealtimeStockPrice(com.example.kiwoomapi.autotrader.controller.StockData stockData) throws IOException;
+    void unsubscribeRealtimeStockPrice(String stockCode, String type);
 }
