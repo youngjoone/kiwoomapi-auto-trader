@@ -4,12 +4,10 @@ import com.example.kiwoomapi.autotrader.http.HttpClientService;
 import com.example.kiwoomapi.autotrader.log.LogService;
 import com.example.kiwoomapi.autotrader.model.TradeInfo;
 import com.example.kiwoomapi.autotrader.model.TradeInfoRepository;
-import com.example.kiwoomapi.autotrader.strategy.UpperLimitBuyStrategy;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.context.annotation.Lazy;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.retry.annotation.Backoff;
 import org.springframework.retry.annotation.Retryable;
@@ -28,7 +26,6 @@ public class OrderServiceImpl implements OrderService {
 
     private final KiwoomTokenService kiwoomTokenService;
     private final ObjectMapper objectMapper = new ObjectMapper();
-    private final UpperLimitBuyStrategy upperLimitBuyStrategy;
     private final TradeInfoRepository tradeInfoRepository;
     private final LogService logService;
     private final HttpClientService httpClientService;
@@ -42,17 +39,11 @@ public class OrderServiceImpl implements OrderService {
     @Value("${kiwoom.order.loss-margin}")
     private double lossMargin;
 
-    public OrderServiceImpl(KiwoomTokenService kiwoomTokenService, @Lazy UpperLimitBuyStrategy upperLimitBuyStrategy, TradeInfoRepository tradeInfoRepository, LogService logService, HttpClientService httpClientService) {
+    public OrderServiceImpl(KiwoomTokenService kiwoomTokenService, TradeInfoRepository tradeInfoRepository, LogService logService, HttpClientService httpClientService) {
         this.kiwoomTokenService = kiwoomTokenService;
-        this.upperLimitBuyStrategy = upperLimitBuyStrategy;
         this.tradeInfoRepository = tradeInfoRepository;
         this.logService = logService;
         this.httpClientService = httpClientService;
-    }
-
-    @Scheduled(cron = "0 0 9 * * MON-FRI", zone = "Asia/Seoul")
-    public void runUpperLimitBuyStrategy() throws IOException {
-        upperLimitBuyStrategy.execute();
     }
 
     @Override
