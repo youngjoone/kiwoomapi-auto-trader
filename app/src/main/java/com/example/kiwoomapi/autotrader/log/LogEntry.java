@@ -22,7 +22,7 @@ public class LogEntry {
     private LocalDateTime timestamp;
     private String apiId;
     private String request;
-    @Column(length = 1000)
+    @Column(length = 2000)
     private String response;
     private String status;
     @Column(length = 2000)
