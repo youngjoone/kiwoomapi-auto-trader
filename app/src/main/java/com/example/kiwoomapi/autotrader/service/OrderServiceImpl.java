@@ -7,6 +7,7 @@ import com.example.kiwoomapi.autotrader.model.TradeInfoRepository;
 import com.example.kiwoomapi.autotrader.model.TradeHistory;
 import com.example.kiwoomapi.autotrader.model.TradeHistoryRepository;
 import com.example.kiwoomapi.autotrader.websocket.KiwoomWebSocketClient;
+import com.example.kiwoomapi.autotrader.model.StockInfo;
 import com.example.kiwoomapi.autotrader.controller.HoldingInfo;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -68,24 +69,27 @@ public class OrderServiceImpl implements OrderService {
             throw new IOException("Access token not available for buy order.");
         }
 
-        long buyPrice = getCurrentPrice(stockCode);
+        StockInfo stockInfo = getStockInfo(stockCode);
+        long buyPrice = stockInfo.getCurrentPrice();
         if (buyPrice <= 0) {
             log.error("Could not get current price for stock: {}. Cannot place buy order.", stockCode);
             throw new IOException("Could not get current price for stock: " + stockCode);
         }
 
-        String stockName = getStockName(stockCode); // 종목명 가져오기
+        String stockName = stockInfo.getStockName(); // 종목명 가져오기
 
-        String orderRequestBody = String.format("{\"CANO\":\"%s\",\"ACNT_PRDT_CD\":\"01\",\"PDNO\":\"%s\",\"ORD_DVSN\":\"01\",\"ORD_QTY\":\"%d\",\"ORD_UNPR\":\"0\"}",
-            kiwoomTokenService.getAccount(), stockCode, quantity);
+        String orderRequestBody = String.format(
+            "{\"dmst_stex_tp\":\"KRX\",\"stk_cd\":\"%s\",\"ord_qty\":\"%d\",\"ord_uv\":\"\",\"trde_tp\":\"3\",\"cond_uv\":\"\"}",
+            stockCode, quantity
+        );
 
         HttpRequest orderRequest = HttpRequest.newBuilder()
-                .uri(URI.create(apiHost + "/uapi/domestic-stock/v1/trading/order-cash"))
-                .header("Content-Type", "application/json; charset=utf-8")
+                .uri(URI.create(apiHost + "/api/dostk/ordr"))
+                .header("Content-Type", "application/json;charset=UTF-8")
                 .header("authorization", "Bearer " + accessToken)
-                .header("appkey", kiwoomTokenService.getAppKey())
-                .header("appsecret", kiwoomTokenService.getAppSecret())
                 .header("api-id", "kt10000")
+                .header("cont-yn", "N")
+                .header("next-key", "")
                 .POST(HttpRequest.BodyPublishers.ofString(orderRequestBody))
                 .build();
 
@@ -119,16 +123,19 @@ public class OrderServiceImpl implements OrderService {
             throw new IOException("Access token not available for sell order.");
         }
 
-        String orderRequestBody = String.format("{\"CANO\":\"%s\",\"ACNT_PRDT_CD\":\"01\",\"PDNO\":\"%s\",\"ORD_DVSN\":\"01\",\"ORD_QTY\":\"%d\",\"ORD_UNPR\":\"0\"}",
-            kiwoomTokenService.getAccount(), stockCode, quantity);
+        // trde_tp = "1" (시장가 매도)
+        String orderRequestBody = String.format(
+            "{\"dmst_stex_tp\":\"KRX\",\"stk_cd\":\"%s\",\"ord_qty\":\"%d\",\"ord_uv\":\"\",\"trde_tp\":\"3\",\"cond_uv\":\"\"}",
+            stockCode, quantity
+        );
 
         HttpRequest orderRequest = HttpRequest.newBuilder()
-                .uri(URI.create(apiHost + "/uapi/domestic-stock/v1/trading/order-cash"))
-                .header("Content-Type", "application/json; charset=utf-8")
+                .uri(URI.create(apiHost + "/api/dostk/ordr"))
+                .header("Content-Type", "application/json;charset=UTF-8")
                 .header("authorization", "Bearer " + accessToken)
-                .header("appkey", kiwoomTokenService.getAppKey())
-                .header("appsecret", kiwoomTokenService.getAppSecret())
                 .header("api-id", "kt10001")
+                .header("cont-yn", "N")
+                .header("next-key", "")
                 .POST(HttpRequest.BodyPublishers.ofString(orderRequestBody))
                 .build();
 
@@ -144,7 +151,7 @@ public class OrderServiceImpl implements OrderService {
             // TradeInfo에서 해당 종목을 찾아 TradeHistory에 저장 후 삭제
             tradeInfoRepository.findById(stockCode).ifPresent(tradeInfo -> {
                 try {
-                    long currentPrice = getCurrentPrice(stockCode); // 매도 시점의 현재가 다시 조회
+                    long currentPrice = getStockInfo(stockCode).getCurrentPrice(); // 매도 시점의 현재가 다시 조회
                     double profitLoss = (currentPrice - tradeInfo.getBuyPrice()) * tradeInfo.getQuantity();
                     double profitLossPercentage = ((double) (currentPrice - tradeInfo.getBuyPrice()) / tradeInfo.getBuyPrice()) * 100;
 
@@ -238,21 +245,23 @@ public class OrderServiceImpl implements OrderService {
         kiwoomWebSocketClient.unsubscribeFromRealtimeStockPrice(stockCode, type);
     }
 
-    public long getCurrentPrice(String stockCode) throws IOException {
+    @Override
+    public StockInfo getStockInfo(String stockCode) throws IOException {
         String accessToken = kiwoomTokenService.getStoredAccessToken();
         if (accessToken == null || accessToken.isEmpty()) {
-            log.error("Access token is not available. Cannot get current price for stock: {}.", stockCode);
-            throw new IOException("Access token not available for current price inquiry.");
+            log.error("Access token is not available. Cannot get stock info for stock: {}.", stockCode);
+            throw new IOException("Access token not available for stock info inquiry.");
         }
-        String url = apiHost + "/uapi/domestic-stock/v1/quotations/inquire-price?fid_cond_mrkt_div_code=J&fid_input_iscd=" + stockCode;
+
+        String url = apiHost + "/api/dostk/stkinfo";
+        String requestBody = String.format("{\"stk_cd\":\"%s\"}", stockCode);
+
         HttpRequest priceRequest = HttpRequest.newBuilder()
                 .uri(URI.create(url))
-                .header("Content-Type", "application/json; charset=utf-8")
+                .header("Content-Type", "application/json;charset=UTF-8")
                 .header("authorization", "Bearer " + accessToken)
-                .header("appkey", kiwoomTokenService.getAppKey())
-                .header("appsecret", kiwoomTokenService.getAppSecret())
                 .header("api-id", "ka10001")
-                .GET()
+                .POST(HttpRequest.BodyPublishers.ofString(requestBody))
                 .build();
 
         String responseBody = "";
@@ -264,51 +273,18 @@ public class OrderServiceImpl implements OrderService {
             responseBody = priceResponse.body();
             JsonNode priceResponseBody = objectMapper.readTree(responseBody);
             status = "SUCCESS";
-            return priceResponseBody.path("output").path("stck_prpr").asLong();
+
+            String stockName = priceResponseBody.path("stk_nm").asText();
+            long currentPrice = priceResponseBody.path("cur_prc").asLong();
+
+            return new StockInfo(stockName, currentPrice);
         } catch (InterruptedException e) {
             errorMessage = e.getMessage();
-            log.error("Error getting current price for stock: {}. Interrupted.", stockCode, e);
+            log.error("Error getting stock info for stock: {}. Interrupted.", stockCode, e);
             Thread.currentThread().interrupt();
-            throw new IOException("Interrupted during get current price for stock: " + stockCode, e);
+            throw new IOException("Interrupted during get stock info for stock: " + stockCode, e);
         } finally {
-            logService.saveLog("getCurrentPrice", url, responseBody, status, errorMessage);
-        }
-    }
-
-    private String getStockName(String stockCode) throws IOException {
-        String accessToken = kiwoomTokenService.getStoredAccessToken();
-        if (accessToken == null || accessToken.isEmpty()) {
-            log.error("Access token is not available. Cannot get stock name for stock: {}.", stockCode);
-            throw new IOException("Access token not available for stock name inquiry.");
-        }
-        String url = apiHost + "/uapi/domestic-stock/v1/quotations/inquire-price?fid_cond_mrkt_div_code=J&fid_input_iscd=" + stockCode;
-        HttpRequest stockInfoRequest = HttpRequest.newBuilder()
-                .uri(URI.create(url))
-                .header("Content-Type", "application/json; charset=utf-8")
-                .header("authorization", "Bearer " + accessToken)
-                .header("appkey", kiwoomTokenService.getAppKey())
-                .header("appsecret", kiwoomTokenService.getAppSecret())
-                .header("api-id", "ka10001")
-                .GET()
-                .build();
-
-        String responseBody = "";
-        String status = "ERROR";
-        String errorMessage = null;
-
-        try {
-            HttpResponse<String> stockInfoResponse = httpClientService.send(stockInfoRequest);
-            responseBody = stockInfoResponse.body();
-            JsonNode stockInfoResponseBody = objectMapper.readTree(responseBody);
-            status = "SUCCESS";
-            return stockInfoResponseBody.path("output").path("stk_nm").asText();
-        } catch (InterruptedException e) {
-            errorMessage = e.getMessage();
-            log.error("Error getting stock name for stock: {}. Interrupted.", stockCode, e);
-            Thread.currentThread().interrupt();
-            throw new IOException("Interrupted during get stock name for stock: " + stockCode, e);
-        } finally {
-            logService.saveLog("getStockName", url, responseBody, status, errorMessage);
+            logService.saveLog("getStockInfo", url, responseBody, status, errorMessage);
         }
     }
 

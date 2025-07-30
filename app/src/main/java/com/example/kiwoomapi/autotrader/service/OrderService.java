@@ -1,6 +1,8 @@
 package com.example.kiwoomapi.autotrader.service;
 
 import com.example.kiwoomapi.autotrader.model.TradeInfo;
+import com.example.kiwoomapi.autotrader.model.StockInfo;
+
 
 import java.io.IOException;
 
@@ -12,5 +14,6 @@ public interface OrderService {
     void startRealtimeMonitoring();
     void processRealtimeStockPrice(com.example.kiwoomapi.autotrader.controller.StockData stockData) throws IOException;
     void unsubscribeRealtimeStockPrice(String stockCode, String type);
-    long getCurrentPrice(String stockCode) throws IOException;
+    StockInfo getStockInfo(String stockCode) throws IOException;
+    
 }

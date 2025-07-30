@@ -2,6 +2,7 @@ package com.example.kiwoomapi.autotrader.controller;
 
 import com.example.kiwoomapi.autotrader.model.TradeInfo;
 import com.example.kiwoomapi.autotrader.model.TradeInfoRepository;
+import com.example.kiwoomapi.autotrader.model.StockInfo;
 import com.example.kiwoomapi.autotrader.service.OrderService;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -29,7 +30,8 @@ public class HoldingsController {
         List<TradeInfo> ownedStocks = tradeInfoRepository.findAll();
 
         for (TradeInfo tradeInfo : ownedStocks) {
-            long currentPrice = orderService.getCurrentPrice(tradeInfo.getStockCode());
+            StockInfo stockInfo = orderService.getStockInfo(tradeInfo.getStockCode());
+            long currentPrice = stockInfo.getCurrentPrice();
             double profitLoss = (currentPrice - tradeInfo.getBuyPrice()) * tradeInfo.getQuantity();
             double profitLossPercentage = ((double) (currentPrice - tradeInfo.getBuyPrice()) / tradeInfo.getBuyPrice()) * 100;
 
