@@ -67,7 +67,7 @@ public class KiwoomWebSocketClient extends TextWebSocketHandler {
     @Override
     protected void handleTextMessage(WebSocketSession session, TextMessage message) throws Exception {
         String messagePayload = message.getPayload();
-        log.info("Received message: {}", messagePayload);
+        log.debug("Received message: {}", messagePayload);
         try {
             JsonNode rootNode = objectMapper.readTree(messagePayload);
             // Check if it's a real-time execution data
