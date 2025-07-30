@@ -1,38 +1,34 @@
 package com.example.kiwoomapi.autotrader.websocket;
 
-import com.example.kiwoomapi.autotrader.model.TradeInfo;
-import com.example.kiwoomapi.autotrader.service.KiwoomTokenService;
 import com.example.kiwoomapi.autotrader.controller.StockData;
+import com.example.kiwoomapi.autotrader.service.KiwoomTokenService;
 import com.example.kiwoomapi.autotrader.service.OrderService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Component;
 import org.springframework.context.annotation.Lazy;
+import org.springframework.stereotype.Component;
+import org.springframework.web.socket.CloseStatus;
+import org.springframework.web.socket.TextMessage;
+import org.springframework.web.socket.WebSocketSession;
+import org.springframework.web.socket.client.standard.StandardWebSocketClient;
+import org.springframework.web.socket.handler.TextWebSocketHandler;
 
-import javax.websocket.*;
 import java.io.IOException;
 import java.net.URI;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 @Slf4j
 @Component
-@ClientEndpoint
-public class KiwoomWebSocketClient {
+public class KiwoomWebSocketClient extends TextWebSocketHandler {
 
-    private Session session;
-    public Session getSession() {
-        return session;
-    }
+    private WebSocketSession session;
     private final KiwoomTokenService kiwoomTokenService;
     private final OrderService orderService;
     private final ObjectMapper objectMapper = new ObjectMapper();
-    private final Map<String, TradeInfo> ownedStocks = new ConcurrentHashMap<>();
     private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
 
     @Value("${kiwoom.api.websocket-host}")
@@ -43,71 +39,63 @@ public class KiwoomWebSocketClient {
         this.orderService = orderService;
     }
 
-    @OnOpen
-    public void onOpen(Session session) {
-        log.info("WebSocket opened: {}", session.getId());
-        this.session = session;
-        // 재연결 시 이전에 구독했던 종목들을 다시 구독
-        for (Map.Entry<String, TradeInfo> entry : ownedStocks.entrySet()) {
-            subscribeToRealtimeStockPrice(entry.getKey());
-        }
-    }
-
-    @OnMessage
-    public void onMessage(String message) {
-        log.info("Received message: {}", message);
-        try {
-            JsonNode rootNode = objectMapper.readTree(message);
-            String trId = rootNode.path("trnm").asText(); // trnm for real-time messages
-            String item = rootNode.path("item").asText(); // item for stock code
-            String type = rootNode.path("type").asText(); // type for real-time item type (e.g., 0B for stock price)
-
-            if ("REAL".equals(trId) && "0B".equals(type)) { 
-                JsonNode values = rootNode.path("values");
-                StockData stockData = new StockData();
-                stockData.setStk_cd(item);
-                stockData.setCur_prc(values.path("10").asText());
-                stockData.setPred_pre(values.path("11").asText());
-                stockData.setFlu_rt(values.path("12").asText());
-                stockData.setSel_bid(values.path("27").asText());
-                stockData.setBuy_bid(values.path("28").asText());
-                stockData.setTrde_qty(values.path("13").asText()); // 누적거래량
-                stockData.setOpen_pric(values.path("16").asText());
-                stockData.setHigh_pric(values.path("17").asText());
-                stockData.setLow_pric(values.path("18").asText());
-                stockData.setPred_pre_sig(values.path("25").asText());
-                // pred_trde_qty_pre_rt는 0B 응답에 직접적으로 없으므로, 일단 비워두거나 다른 방식으로 처리해야 합니다.
-                stockData.setPred_trde_qty_pre_rt("");
-
-                orderService.processRealtimeStockPrice(stockData);
-            }
-        } catch (IOException e) {
-            log.error("Error processing WebSocket message: {}", message, e);
-        }
-    }
-
-    @OnError
-    public void onError(Session session, Throwable throwable) {
-        log.error("WebSocket error for session {}: {}", session.getId(), throwable.getMessage(), throwable);
-        reconnect();
-    }
-
-    @OnClose
-    public void onClose(Session session, CloseReason closeReason) {
-        log.info("WebSocket closed for session {}: {}", session.getId(), closeReason.getReasonPhrase());
-        reconnect();
-    }
-
     public void connect() {
         try {
-            WebSocketContainer container = ContainerProvider.getWebSocketContainer();
-            Session newSession = container.connectToServer(this, URI.create(websocketHost));
-            this.session = newSession; // 연결 성공 시 session 업데이트
-            log.info("Successfully connected to WebSocket: {}", newSession.getId());
-        } catch (DeploymentException | IOException e) {
+            StandardWebSocketClient client = new StandardWebSocketClient();
+            org.springframework.web.socket.WebSocketHttpHeaders headers = new org.springframework.web.socket.WebSocketHttpHeaders();
+            String accessToken = kiwoomTokenService.getStoredAccessToken();
+            if (accessToken != null && !accessToken.isEmpty()) {
+                headers.add("authorization", "Bearer " + accessToken);
+                headers.add("appkey", kiwoomTokenService.getAppKey());
+                headers.add("appsecret", kiwoomTokenService.getAppSecret());
+                headers.add("tr_type", "1"); // 1: 실시간 등록
+            }
+            this.session = client.execute(this, headers, URI.create(websocketHost)).get(10, TimeUnit.SECONDS); // Timeout increased to 10s
+            log.info("Successfully connected to WebSocket: {}", this.session.getId());
+        } catch (Exception e) {
             log.error("Error connecting to WebSocket: {}", e.getMessage(), e);
             reconnect();
         }
+    }
+
+    @Override
+    public void afterConnectionEstablished(WebSocketSession session) throws Exception {
+        log.info("WebSocket connection established: {}", session.getId());
+        this.session = session;
+    }
+
+    @Override
+    protected void handleTextMessage(WebSocketSession session, TextMessage message) throws Exception {
+        String messagePayload = message.getPayload();
+        log.info("Received message: {}", messagePayload);
+        try {
+            JsonNode rootNode = objectMapper.readTree(messagePayload);
+            // Check if it's a real-time execution data
+            if (rootNode.has("header") && "H0STCNI0".equals(rootNode.path("header").path("tr_id").asText())) {
+                JsonNode body = rootNode.path("body");
+                StockData stockData = new StockData();
+                stockData.setStk_cd(body.path("stck_shrn_iscd").asText());
+                stockData.setCur_prc(body.path("stck_prpr").asText());
+                // Pass to order service to process
+                orderService.processRealtimeStockPrice(stockData);
+            }
+        } catch (IOException e) {
+            log.error("Error processing WebSocket message: {}", messagePayload, e);
+        }
+    }
+
+    @Override
+    public void afterConnectionClosed(WebSocketSession session, CloseStatus status) throws Exception {
+        log.info("WebSocket connection closed for session {}: {}", session.getId(), status);
+        this.session = null; // Clear the session
+        reconnect();
+    }
+
+    @Override
+    public void handleTransportError(WebSocketSession session, Throwable exception) throws Exception {
+        log.error("WebSocket transport error for session {}: {}", session.getId(), exception.getMessage(), exception);
+        this.session = null; // Clear the session
+        reconnect();
     }
 
     private void reconnect() {
@@ -116,45 +104,38 @@ public class KiwoomWebSocketClient {
     }
 
     public void subscribeToRealtimeStockPrice(String stockCode) {
-        String accessToken = kiwoomTokenService.getStoredAccessToken();
-        if (session != null && session.isOpen() && accessToken != null) {
-            // Kiwoom API real-time subscription message format for 0B (주식체결)
-            String subscribeMessage = String.format("{\"trnm\":\"REG\",\"grp_no\":\"1\",\"refresh\":\"1\",\"data\":[{\"item\":[\"%s\"],\"type\":[\"0B\"]}]}", stockCode);
+        if (session != null && session.isOpen()) {
+            String accessToken = kiwoomTokenService.getStoredAccessToken();
+            String subscribeMessage = String.format("{\"header\":{\"authorization\":\"Bearer %s\",\"appkey\":\"%s\",\"appsecret\":\"%s\",\"tr_type\":\"1\"},\"body\":{\"input\":{\"tr_id\":\"H0STCNI0\",\"tr_key\":\"%s\"}}}", 
+                accessToken, kiwoomTokenService.getAppKey(), kiwoomTokenService.getAppSecret(), stockCode);
             try {
-                session.getBasicRemote().sendText(subscribeMessage);
+                session.sendMessage(new TextMessage(subscribeMessage));
                 log.info("Subscribed to real-time data for stock: {}", stockCode);
             } catch (IOException e) {
                 log.error("Error subscribing to real-time data for stock {}: {}", stockCode, e);
             }
-        }
-        else {
-            log.warn("WebSocket session is not open or access token is null. Cannot subscribe to {}.", stockCode);
+        } else {
+            log.warn("WebSocket session is not open. Cannot subscribe to {}.", stockCode);
         }
     }
 
     public void unsubscribeFromRealtimeStockPrice(String stockCode, String type) {
-        String accessToken = kiwoomTokenService.getStoredAccessToken();
-        if (session != null && session.isOpen() && accessToken != null) {
-            String unsubscribeMessage = String.format("{\"trnm\":\"REMOVE\",\"grp_no\":\"1\",\"data\":[{\"item\":[\"%s\"],\"type\":[\"%s\"]}]}", stockCode, type);
+        if (session != null && session.isOpen()) {
+            String accessToken = kiwoomTokenService.getStoredAccessToken();
+            String unsubscribeMessage = String.format("{\"header\":{\"authorization\":\"Bearer %s\",\"appkey\":\"%s\",\"appsecret\":\"%s\",\"tr_type\":\"2\"},\"body\":{\"input\":{\"tr_id\":\"H0STCNI0\",\"tr_key\":\"%s\"}}}", 
+                accessToken, kiwoomTokenService.getAppKey(), kiwoomTokenService.getAppSecret(), stockCode);
             try {
-                session.getBasicRemote().sendText(unsubscribeMessage);
+                session.sendMessage(new TextMessage(unsubscribeMessage));
                 log.info("Unsubscribed from real-time data for stock {} and type {}.", stockCode, type);
             } catch (IOException e) {
                 log.error("Error unsubscribing from real-time data for stock {} and type {}: {}", stockCode, type, e);
             }
-        }
-        else {
-            log.warn("WebSocket session is not open or access token is null. Cannot unsubscribe from {} ({}).", stockCode, type);
+        } else {
+            log.warn("WebSocket session is not open. Cannot unsubscribe from {} ({}).", stockCode, type);
         }
     }
-
-    public void addOwnedStock(TradeInfo tradeInfo) {
-        ownedStocks.put(tradeInfo.getStockCode(), tradeInfo);
-        subscribeToRealtimeStockPrice(tradeInfo.getStockCode());
-    }
-
-    public void removeOwnedStock(String stockCode) {
-        ownedStocks.remove(stockCode);
-        // Optionally unsubscribe from real-time data - will be called from OrderService
+    
+    public WebSocketSession getSession() {
+        return session;
     }
 }
